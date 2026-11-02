@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/prisma";
 import { z } from "zod";
 import { calculatePriorityScore } from "@/lib/ai/prioritisation";
+import { getDpdBucket } from "@/lib/analytics/roll-rate";
 
 const OutcomeLoggingSchema = z.object({
   idempotencyKey: z.string().min(6),
@@ -93,8 +94,14 @@ export async function POST(req: NextRequest) {
       promiseRecordId = newPromise.id;
     }
 
-    // 2. If PAID, mark any existing pending promise as FULFILLED and update loan outstanding
+    // 2. State transition calculations (Outstanding, Missed EMIs, DPD, Status)
+    let updatedOutstanding = loan.outstandingAmount;
+    let newDpd = loan.dpd;
+    let newMissedEmis = loan.totalMissedEmis;
+    let newStatus = loan.status;
+
     if (data.outcomeType === "PAID" && data.amountCollected) {
+      // Mark any pending promise as fulfilled
       const pendingPromise = await db.promiseToPay.findFirst({
         where: { loanId: loan.id, status: { in: ["PENDING", "DUE_TODAY"] } },
         orderBy: { createdAt: "desc" },
@@ -111,15 +118,34 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const updatedOutstanding = Math.max(0, loan.outstandingAmount - data.amountCollected);
+      updatedOutstanding = Math.max(0, loan.outstandingAmount - data.amountCollected);
+
+      // Compute how many EMIs were covered by this payment
+      const emi = loan.emiAmount || 1;
+      const emisPaid = Math.max(1, Math.round(data.amountCollected / emi));
+      newMissedEmis = Math.max(0, loan.totalMissedEmis - emisPaid);
+      newDpd = newMissedEmis === 0 ? 0 : Math.max(0, loan.dpd - 30 * emisPaid);
+      const newDpdBucket = getDpdBucket(newDpd);
+
+      newStatus = updatedOutstanding === 0 ? "PAID_OFF" : (newDpd === 0 ? "CURED" : "ACTIVE");
+
       await db.loan.update({
         where: { id: loan.id },
         data: {
           outstandingAmount: updatedOutstanding,
+          dpd: newDpd,
+          dpdBucket: newDpdBucket,
+          totalMissedEmis: newMissedEmis,
+          status: newStatus,
           lastPaymentDate: clientTime,
           lastPaymentAmount: data.amountCollected,
-          status: updatedOutstanding === 0 ? "PAID_OFF" : loan.status,
         },
+      });
+    } else if (data.outcomeType === "DISPUTE") {
+      newStatus = "DISPUTED";
+      await db.loan.update({
+        where: { id: loan.id },
+        data: { status: "DISPUTED" },
       });
     }
 
@@ -155,13 +181,16 @@ export async function POST(req: NextRequest) {
           amount: data.amountCollected,
           promisedAmount: data.promisedAmount,
           promiseDate: data.promiseDate,
+          newOutstanding: updatedOutstanding,
+          newDpd,
+          newStatus,
           notes: data.notes,
           gps: data.latitude ? `${data.latitude}, ${data.longitude}` : "N/A",
         }),
       },
     });
 
-    // 5. Recompute AI Priority Score based on new state
+    // 5. Recompute AI Priority Score based on updated state
     const latestPromise = await db.promiseToPay.findFirst({
       where: { loanId: loan.id },
       orderBy: { createdAt: "desc" },
@@ -170,10 +199,16 @@ export async function POST(req: NextRequest) {
     const aiResult = calculatePriorityScore({
       loanId: loan.id,
       borrowerName: loan.borrower.name,
-      dpd: loan.dpd,
-      outstandingAmount: loan.outstandingAmount,
-      totalMissedEmis: loan.totalMissedEmis,
-      promiseStatus: latestPromise?.status as "BROKEN" | "DUE_TODAY" | "PENDING" | "FULFILLED" | "NONE" | undefined,
+      dpd: newDpd,
+      outstandingAmount: updatedOutstanding,
+      totalMissedEmis: newMissedEmis,
+      promiseStatus: latestPromise?.status as
+        | "BROKEN"
+        | "DUE_TODAY"
+        | "PENDING"
+        | "FULFILLED"
+        | "NONE"
+        | undefined,
     });
 
     await db.loan.update({
@@ -189,6 +224,9 @@ export async function POST(req: NextRequest) {
       success: true,
       outcomeId: outcome.id,
       recalculatedScore: aiResult.score,
+      newDpd,
+      newStatus,
+      updatedOutstanding,
     });
   } catch (err: unknown) {
     console.error("Outcome logging error:", err);
@@ -198,3 +236,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

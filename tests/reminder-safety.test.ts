@@ -49,3 +49,4 @@ describe("AI Reminder Drafting & Safety Policy", () => {
     expect(check.blockedWordsFound).toContain("seize");
   });
 });
+

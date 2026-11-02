@@ -66,6 +66,9 @@ export function calculatePriorityScore(input: PrioritisationInput): Prioritisati
   } else if (input.promiseStatus === "PENDING") {
     promisePoints = 12;
     promiseReason = "Active promise to pay pending verification.";
+  } else if (input.promiseStatus === "FULFILLED") {
+    promisePoints = 0;
+    promiseReason = "Recent payment commitment fulfilled successfully.";
   } else {
     promisePoints = 4;
     promiseReason = "No active promise recorded.";
@@ -82,7 +85,10 @@ export function calculatePriorityScore(input: PrioritisationInput): Prioritisati
   let dpdPoints = 0;
   let dpdReason = "";
 
-  if (input.dpd >= 15 && input.dpd <= 30) {
+  if (input.dpd === 0) {
+    dpdPoints = 0;
+    dpdReason = "Account cured — 0 DPD (current on payments).";
+  } else if (input.dpd >= 15 && input.dpd <= 30) {
     dpdPoints = 28;
     dpdReason = `Loan is ${input.dpd} days past due, nearing roll into 31-60 DPD bucket.`;
   } else if (input.dpd >= 50 && input.dpd <= 60) {
@@ -91,7 +97,7 @@ export function calculatePriorityScore(input: PrioritisationInput): Prioritisati
   } else if (input.dpd > 60) {
     dpdPoints = 26;
     dpdReason = `High overdue vintage at ${input.dpd} DPD.`;
-  } else if (input.dpd >= 10 && input.dpd < 20) {
+  } else if (input.dpd >= 10 && input.dpd < 15) {
     dpdPoints = 20;
     dpdReason = `Loan is ${input.dpd} days past due.`;
   } else if (input.dpd > 0) {
@@ -147,8 +153,8 @@ export function calculatePriorityScore(input: PrioritisationInput): Prioritisati
     historyPoints = 6;
     historyReason = "Single missed EMI instalment.";
   } else {
-    historyPoints = 2;
-    historyReason = "No prior missed instalments.";
+    historyPoints = 0;
+    historyReason = "All overdue monthly instalments cleared.";
   }
   components.push({
     factor: "Repayment Track Record",

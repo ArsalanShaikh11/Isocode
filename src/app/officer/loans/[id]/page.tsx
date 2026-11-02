@@ -123,16 +123,23 @@ export default function LoanDetailPage({
   const [reminderDispatched, setReminderDispatched] = useState(false);
   const [simulationBypass, setSimulationBypass] = useState(false);
 
-  const fetchLoanDetails = async () => {
+  const fetchLoanDetails = async (preserveTab = false) => {
     setIsLoading(true);
     try {
       const res = await fetch(`/api/officer/loans/${loanId}`);
       if (res.ok) {
         const data = await res.json();
         setLoan(data.loan);
-        if (data.loan.emiAmount) {
-          setPaidAmount(data.loan.emiAmount.toString());
-          setPromisedAmount(data.loan.emiAmount.toString());
+        if (!preserveTab) {
+          if (data.loan.dpd === 0 || data.loan.status === "CURED") {
+            setSelectedOutcomeTab("PAID");
+          } else {
+            setSelectedOutcomeTab("PROMISE_TO_PAY");
+          }
+          if (data.loan.emiAmount) {
+            setPaidAmount(data.loan.emiAmount.toString());
+            setPromisedAmount(data.loan.emiAmount.toString());
+          }
         }
       }
     } catch (err) {
@@ -204,8 +211,13 @@ export default function LoanDetailPage({
         });
 
         if (res.ok) {
-          setSubmitSuccess("Outcome recorded & audit log updated.");
-          await fetchLoanDetails();
+          const respData = await res.json();
+          if (respData.newStatus === "CURED" || respData.newDpd === 0) {
+            setSubmitSuccess(`Payment of ₹${Number(paidAmount).toLocaleString("en-IN")} received! Account cured to 0 DPD.`);
+          } else {
+            setSubmitSuccess("Outcome recorded & audit log updated.");
+          }
+          await fetchLoanDetails(true);
         } else {
           // If server error, enqueue offline
           await enqueueOfflineOutcome(payload);
@@ -221,7 +233,7 @@ export default function LoanDetailPage({
       setSubmitSuccess("Network error: Saved offline in device queue.");
     } finally {
       setIsSubmitting(false);
-      setTimeout(() => setSubmitSuccess(null), 5000);
+      setTimeout(() => setSubmitSuccess(null), 6000);
     }
   };
 
@@ -343,9 +355,26 @@ export default function LoanDetailPage({
         <div className="bg-white rounded-xl border border-[#E2E4DE] shadow-card p-4 space-y-3">
           <div className="flex items-start justify-between">
             <div>
-              <span className="font-mono text-xs font-bold text-muted bg-[#F2F3EE] px-2 py-0.5 rounded">
-                {loan.id}
-              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-mono text-xs font-bold text-muted bg-[#F2F3EE] px-2 py-0.5 rounded">
+                  {loan.id}
+                </span>
+                {loan.status === "CURED" && (
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-[#DCFCE7] text-[#14532D] font-bold">
+                    Cured / Current
+                  </span>
+                )}
+                {loan.status === "PAID_OFF" && (
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-[#DCFCE7] text-[#14532D] font-bold">
+                    Paid Off
+                  </span>
+                )}
+                {loan.status === "DISPUTED" && (
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-[#FEE2E2] text-[#7F1D1D] font-bold">
+                    Disputed
+                  </span>
+                )}
+              </div>
               <h1 className="text-base font-bold text-[#171918] mt-1">
                 {loan.borrower.name}
               </h1>
@@ -373,10 +402,14 @@ export default function LoanDetailPage({
               <span className="text-[10px] text-muted block">Days Past Due</span>
               <span
                 className={`font-bold ${
-                  loan.dpd >= 30 ? "text-[#B91C1C]" : "text-[#B45309]"
+                  loan.dpd === 0
+                    ? "text-[#15803D]"
+                    : loan.dpd >= 30
+                    ? "text-[#B91C1C]"
+                    : "text-[#B45309]"
                 }`}
               >
-                {loan.dpd} DPD ({loan.dpdBucket})
+                {loan.dpd === 0 ? "0 DPD (Cured)" : `${loan.dpd} DPD (${loan.dpdBucket})`}
               </span>
             </div>
             <div>
@@ -387,8 +420,8 @@ export default function LoanDetailPage({
             </div>
             <div>
               <span className="text-[10px] text-muted block">Missed EMIs</span>
-              <span className="font-medium text-[#171918]">
-                {loan.totalMissedEmis} missed
+              <span className={`font-medium ${loan.totalMissedEmis === 0 ? "text-[#15803D] font-bold" : "text-[#171918]"}`}>
+                {loan.totalMissedEmis === 0 ? "0 (Current)" : `${loan.totalMissedEmis} missed`}
               </span>
             </div>
           </div>
@@ -406,6 +439,17 @@ export default function LoanDetailPage({
             </a>
           </div>
         </div>
+
+        {/* Cured Banner if loan is current */}
+        {(loan.status === "CURED" || loan.dpd === 0) && (
+          <div className="p-3.5 rounded-xl bg-[#DCFCE7] border border-[#BBF7D0] text-xs text-[#14532D] flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-[#15803D] shrink-0" />
+            <div>
+              <span className="font-bold">Account is Cured & Current: </span>
+              Overdue monthly instalment has been settled. Delinquency reduced to 0 DPD and priority score downgraded to Low.
+            </div>
+          </div>
+        )}
 
         {/* Explainable AI Scoring Reasons */}
         <div className="bg-[#FAFBF9] rounded-xl border border-[#E2E4DE] p-3.5 space-y-2">
@@ -758,3 +802,4 @@ export default function LoanDetailPage({
     </div>
   );
 }
+

@@ -40,7 +40,8 @@ export interface RollRateSummary {
 /**
  * Calculates DPD bucket assignments from raw DPD
  */
-export function getDpdBucket(dpd: number): "1-30" | "31-60" | "61-90" | "90+" {
+export function getDpdBucket(dpd: number): "CURRENT" | "1-30" | "31-60" | "61-90" | "90+" {
+  if (dpd <= 0) return "CURRENT";
   if (dpd <= 30) return "1-30";
   if (dpd <= 60) return "31-60";
   if (dpd <= 90) return "61-90";
@@ -121,3 +122,4 @@ export function computeRollRateAnalytics(
     promiseBrokenRatePercent: Number(promiseBrokenRate.toFixed(1)),
   };
 }
+

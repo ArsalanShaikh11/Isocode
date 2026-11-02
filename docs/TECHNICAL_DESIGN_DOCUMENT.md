@@ -317,3 +317,4 @@ $$S = \min\left(100, \max\left(0, P_{\text{promise}} + P_{\text{dpd}} + P_{\text
 - Integration with NPCI Bharat BillPay (BBPS) for instant UPI dynamic QR generation at doorstep.
 - Multi-lingual voice note transcription for Hindi/Malwi dialect visit summaries.
 - Route optimization with real-time Indore traffic clustering via OpenStreetMap.
+

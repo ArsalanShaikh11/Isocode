@@ -43,3 +43,4 @@ describe("Contact Time Restrictions (8 AM - 7 PM IST)", () => {
     expect(status.currentIstTime).toContain("Simulation Bypass Active");
   });
 });
+

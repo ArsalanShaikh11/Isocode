@@ -115,13 +115,14 @@ describe("End-to-End Core Collections Workflow & Access Control", () => {
     const recalculated = calculatePriorityScore({
       loanId: testLoanId,
       borrowerName: "Test E2E Borrower",
-      dpd: 18,
+      dpd: 0,
       outstandingAmount: updatedLoan.outstandingAmount,
-      totalMissedEmis: 1,
-      promiseStatus: "NONE",
+      totalMissedEmis: 0,
+      promiseStatus: "FULFILLED",
     });
-    expect(recalculated.score).toBeGreaterThan(0);
-    expect(recalculated.reasons.length).toBe(3);
+    expect(recalculated.score).toBeLessThan(30);
+    expect(recalculated.category).toBe("LOW");
+    expect(recalculated.reasons).toContain("Account cured — 0 DPD (current on payments).");
   });
 
   it("should enforce officer loan assignment scoping", async () => {
@@ -136,3 +137,4 @@ describe("End-to-End Core Collections Workflow & Access Control", () => {
     expect(isUnauthorizedOfficer).toBe(false);
   });
 });
+

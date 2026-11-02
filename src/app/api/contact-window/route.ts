@@ -8,3 +8,4 @@ export async function GET(req: NextRequest) {
   const status = checkContactWindow({ simulationBypass: bypass });
   return NextResponse.json(status);
 }
+

@@ -76,6 +76,11 @@ export async function POST(req: NextRequest) {
       promiseRecordId = newPromise.id;
     }
 
+    let updatedOutstanding = loan.outstandingAmount;
+    let newDpd = loan.dpd;
+    let newMissedEmis = loan.totalMissedEmis;
+    let newStatus = loan.status;
+
     if (outcomeType === "PAID" && amountCollected) {
       const amt = Number(amountCollected);
       const pendingPromise = await db.promiseToPay.findFirst({
@@ -93,10 +98,22 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      updatedOutstanding = Math.max(0, loan.outstandingAmount - amt);
+      const emi = loan.emiAmount || 1;
+      const emisPaid = Math.max(1, Math.round(amt / emi));
+      newMissedEmis = Math.max(0, loan.totalMissedEmis - emisPaid);
+      newDpd = newMissedEmis === 0 ? 0 : Math.max(0, loan.dpd - 30 * emisPaid);
+      const newDpdBucket = newDpd === 0 ? "CURRENT" : (newDpd <= 30 ? "1-30" : "31-60");
+      newStatus = updatedOutstanding === 0 ? "PAID_OFF" : (newDpd === 0 ? "CURED" : "ACTIVE");
+
       await db.loan.update({
         where: { id: loan.id },
         data: {
-          outstandingAmount: Math.max(0, loan.outstandingAmount - amt),
+          outstandingAmount: updatedOutstanding,
+          dpd: newDpd,
+          dpdBucket: newDpdBucket,
+          totalMissedEmis: newMissedEmis,
+          status: newStatus,
           lastPaymentDate: clientTime,
           lastPaymentAmount: amt,
         },
@@ -149,3 +166,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

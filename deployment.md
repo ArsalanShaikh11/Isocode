@@ -116,3 +116,4 @@ CMD ["pnpm", "start"]
 - [x] Offline IndexedDB cache & sync queue active on Android Chrome.
 - [x] Contact time restriction verified for Asia/Kolkata (8 AM – 7 PM IST).
 - [x] Explainable AI scoring math verified for LN-11930 (Score: 86/100).
+

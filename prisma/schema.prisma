@@ -179,3 +179,4 @@ model RollRateSnapshot {
   cureRatePercent  Float
   createdAt        DateTime @default(now())
 }
+

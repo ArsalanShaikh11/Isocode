@@ -78,3 +78,4 @@ export async function requireAuth(allowedRoles?: Array<"OFFICER" | "MANAGER">) {
   }
   return user;
 }
+

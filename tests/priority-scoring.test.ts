@@ -51,6 +51,22 @@ describe("AI Prioritisation Scoring Engine", () => {
     expect(result.hasLimitedEvidence).toBe(true);
   });
 
+  it("should downgrade priority score and display cured reasons when payment clears overdue instalments", () => {
+    const result = calculatePriorityScore({
+      loanId: "LN-11405",
+      borrowerName: "Malwa Fabricators & Textile",
+      dpd: 0,
+      outstandingAmount: 404000,
+      totalMissedEmis: 0,
+      promiseStatus: "FULFILLED",
+    });
+
+    expect(result.score).toBeLessThan(30);
+    expect(result.category).toBe("LOW");
+    expect(result.reasons).toContain("Account cured — 0 DPD (current on payments).");
+    expect(result.reasons).toContain("Recent payment commitment fulfilled successfully.");
+  });
+
   it("should format Indian currency values correctly", () => {
     expect(formatLakhs(640000)).toBe("₹6.4 lakh");
     expect(formatLakhs(220000)).toBe("₹2.2 lakh");
@@ -58,3 +74,4 @@ describe("AI Prioritisation Scoring Engine", () => {
     expect(formatLakhs(45000)).toBe("₹45,000");
   });
 });
+
