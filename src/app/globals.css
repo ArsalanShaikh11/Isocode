@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #F8F8F5;
+  --foreground: #171918;
+  --primary: #176B4D;
+  --primary-foreground: #FFFFFF;
+  --border: #E2E4DE;
+  --muted-stone: #E8E9E3;
+  --success: #15803D;
+  --warning: #B45309;
+  --critical: #B91C1C;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom minimal scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D5D7D0;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B8BBAF;
+}
+
+/* Fluid headline typography helper */
+.fluid-h1 {
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.fluid-h2 {
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+/* Mobile-first tap target utility */
+.touch-target {
+  min-height: 48px;
+  min-width: 48px;
+}

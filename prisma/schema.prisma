@@ -1,0 +1,181 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String   // "OFFICER" | "MANAGER"
+  phone        String
+  branchId     String?
+  branch       Branch?  @relation(fields: [branchId], references: [id])
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignedLoans      Loan[]              @relation("AssignedOfficer")
+  collectionOutcomes CollectionOutcome[]
+  promises           PromiseToPay[]
+  reminders          ReminderLog[]
+  auditEvents        AuditEvent[]
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  code      String   @unique // e.g. "IND-PAL", "IND-VIJ", "PITH-01"
+  name      String   // e.g. "Indore Palasia", "Indore Vijay Nagar", "Pithampur Industrial"
+  city      String   @default("Indore")
+  state     String   @default("Madhya Pradesh")
+  pincodes  String   // Comma-separated or JSON list of handled pincodes: "452001,452002,452010"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+  loans Loan[]
+}
+
+model Borrower {
+  id             String   @id @default(cuid())
+  name           String   // e.g. "Company B (packaging unit)"
+  contactPerson  String?
+  businessType   String   // "Packaging Unit", "Fertiliser Retailer", "Printing Press", "Auto Parts", "Textile Trader"
+  phone          String
+  alternatePhone String?
+  address        String
+  pincode        String   // e.g. "452001"
+  latitude       Float?
+  longitude      Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  loans Loan[]
+}
+
+model Loan {
+  id                String    @id // Loan ID like "LN-10293", "LN-10871", "LN-11930"
+  borrowerId        String
+  borrower          Borrower  @relation(fields: [borrowerId], references: [id])
+  branchId          String
+  branch            Branch    @relation(fields: [branchId], references: [id])
+  assignedOfficerId String?
+  assignedOfficer   User?     @relation("AssignedOfficer", fields: [assignedOfficerId], references: [id])
+
+  disbursedAmount   Float
+  outstandingAmount Float
+  dpd               Int       // Days Past Due
+  dpdBucket         String    // "1-30", "31-60", "61-90", "90+"
+  emiAmount         Float
+  totalMissedEmis   Int       @default(1)
+  lastPaymentDate   DateTime?
+  lastPaymentAmount Float?
+
+  // Explainable AI Prioritisation
+  priorityScore     Float     // 0 - 100
+  priorityCategory  String    // "CRITICAL" (80-100), "HIGH" (60-79), "MEDIUM" (40-59), "LOW" (0-39)
+  priorityReasons   String    // JSON string array of top 3 reasons
+  priorityOverride  Boolean   @default(false)
+  overrideScore     Float?
+  overrideReason    String?
+
+  status            String    @default("ACTIVE") // "ACTIVE", "PAID_OFF", "RESTRUCTURED", "LEGAL_HOLD"
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  promises           PromiseToPay[]
+  collectionOutcomes CollectionOutcome[]
+  reminders          ReminderLog[]
+  auditEvents        AuditEvent[]
+}
+
+model PromiseToPay {
+  id              String    @id @default(cuid())
+  loanId          String
+  loan            Loan      @relation(fields: [loanId], references: [id])
+  officerId       String
+  officer         User      @relation(fields: [officerId], references: [id])
+  promisedAmount  Float
+  promiseDate     DateTime
+  status          String    // "PENDING", "DUE_TODAY", "FULFILLED", "BROKEN", "CANCELLED"
+  notes           String?
+  fulfilledDate   DateTime?
+  fulfilledAmount Float?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  outcomes CollectionOutcome[]
+}
+
+model CollectionOutcome {
+  id               String        @id @default(cuid())
+  idempotencyKey   String        @unique // Prevents offline queue double submissions
+  loanId           String
+  loan             Loan          @relation(fields: [loanId], references: [id])
+  officerId        String
+  officer          User          @relation(fields: [officerId], references: [id])
+  outcomeType      String        // "PAID", "PROMISE_TO_PAY", "NOT_REACHABLE", "DISPUTE"
+  amountCollected  Float?
+  paymentMode      String?       // "UPI", "CASH", "NEFT_RTGS", "CHEQUE"
+  receiptNumber    String?
+  promiseId        String?
+  promise          PromiseToPay? @relation(fields: [promiseId], references: [id])
+  followUpDate     DateTime?
+  disputeReason    String?
+  notes            String?
+  latitude         Float?
+  longitude        Float?
+  isOfflineSync    Boolean       @default(false)
+  clientRecordedAt DateTime      // Timestamp from client device when the officer clicked save
+  serverReceivedAt DateTime      @default(now())
+  createdAt        DateTime      @default(now())
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  loanId    String?
+  loan      Loan?    @relation(fields: [loanId], references: [id])
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String   // "OUTCOME_LOGGED", "PROMISE_CREATED", "CONTACT_ATTEMPTED", "LOAN_ASSIGNED", "PRIORITY_OVERRIDDEN", "CSV_IMPORTED"
+  details   String   // JSON string of event details
+  ipAddress String?
+  timestamp DateTime @default(now())
+}
+
+model ReminderLog {
+  id               String   @id @default(cuid())
+  loanId           String
+  loan             Loan     @relation(fields: [loanId], references: [id])
+  officerId        String
+  officer          User     @relation(fields: [officerId], references: [id])
+  language         String   // "EN", "HI"
+  templateId       String
+  messageContent   String
+  recipientPhone   String
+  safetyPassed     Boolean  @default(true)
+  approvedByOfficer Boolean @default(false)
+  status           String   // "PREVIEWED", "APPROVED_SIMULATED", "BLOCKED"
+  blockReason      String?
+  timestamp        DateTime @default(now())
+}
+
+model RollRateSnapshot {
+  id               String   @id @default(cuid())
+  periodLabel      String   // e.g. "Oct 2026", "Sep 2026"
+  branchId         String?
+  total1to30Count  Int
+  total1to30Volume Float
+  rolledTo31to60Count  Int
+  rolledTo31to60Volume Float
+  rollRatePercent  Float
+  curedCount       Int
+  curedVolume      Float
+  cureRatePercent  Float
+  createdAt        DateTime @default(now())
+}
